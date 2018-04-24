@@ -3,13 +3,15 @@ import PropTypes from 'prop-types';
 import FontAwesome from 'react-fontawesome';
 import Autosuggest from 'react-autosuggest';
 import MapboxClient from 'mapbox';
-import { withRouter } from 'react-router'
+import { withRouter } from 'react-router';
 
 import CrossingMapSearchCrossingSuggestions from 'components/Shared/CrossingMapPage/CrossingMapSearchCrossingSuggestions';
 import { MapboxAccessToken } from 'constants/MapboxConstants';
 import 'components/Shared/CrossingMapPage/CrossingMapSearchBar.css';
 
 import CloseLightSvg from 'images/close-light.svg';
+import LocationLightSvg from 'images/location-light.svg';
+import SearchLightSvg from 'images/search-light.svg';
 
 const mapboxClient = new MapboxClient(MapboxAccessToken);
 
@@ -55,15 +57,34 @@ const formatSearchQuery = query => {
 class CrossingMapSearchBar extends Component {
   static propTypes = {
     history: PropTypes.object.isRequired,
+  };
+
+  constructor(props, ...args) {
+    super(props, ...args);
+
+    this.state = {
+      isSearching: this.computeIsSearching(props),
+      typedValue: '',
+      selectedValue: '',
+      mapboxSuggestions: [],
+      crossingSuggestions: -[],
+      communitySuggestions: [],
+    };
   }
 
-  state = {
-    typedValue: '',
-    selectedValue: '',
-    mapboxSuggestions: [],
-    crossingSuggestions: [],
-    communitySuggestions: [],
-  };
+  computeIsSearching(props) {
+    return !(
+      props.selectedCrossingId || props.match.params.selectedCommunityId
+    );
+  }
+
+  componentDidUpdate(prevProps) {
+    const wasSearching = this.computeIsSearching(prevProps);
+    const isSearching = this.computeIsSearching(this.props);
+    if (wasSearching !== isSearching) {
+      this.setState({ isSearching });
+    }
+  }
 
   onChange = (event, { newValue, method }) => {
     if (method === 'type') {
@@ -135,7 +156,7 @@ class CrossingMapSearchBar extends Component {
     }
 
     // If we aren't filtering by community, get the communities
-    if (!communityId) {
+    if (!communityId ) {
       const communitySuggestions = communities
         .filter(c => c.name.toLowerCase().includes(inputValue))
         .slice(0, 4);
@@ -151,9 +172,8 @@ class CrossingMapSearchBar extends Component {
     });
   };
 
-  clearSearch = () => {
+  resetMap = () => {
     this.props.selectCrossing(null, null);
-    this.setState({ typedValue: '', selectedValue: null });
     this.props.history.push('/map');
   };
 
@@ -172,7 +192,8 @@ class CrossingMapSearchBar extends Component {
   };
 
   render() {
-    const { selectedCrossingId, communityId } = this.props;
+    const { selectedCrossingId } = this.props;
+    const { selectedCommunityId } = this.props.match.params;
 
     const {
       typedValue,
@@ -214,54 +235,78 @@ class CrossingMapSearchBar extends Component {
       <div>
         <CrossingMapSearchCrossingSuggestions
           searchQuery={formattedQuery}
-          communityId={communityId}
           updateSuggestions={this.updateCrossingSuggestions}
         />
         <div className="CrossingMapSearchBar__header">
           Search for a place, community, or crossing
         </div>
         <div className="CrossingMapSearchBar__container">
-          <div className="CrossingMapSearchBar__location-icon">
-            <FontAwesome name="map-marker" size="2x" />
-          </div>
-          <div className="CrossingMapSearchBar__text-entry">
-            {selectedCrossingId && (
+          {!this.state.isSearching && (selectedCrossingId || selectedCommunityId) && (
+            <div className="CrossingMapSearchBar__selected-container">
+              <div className="CrossingMapSearchBar__icon">
+                <img src={LocationLightSvg} alt="" />
+              </div>
+              <div className="CrossingMapSearchBar__title">
+                {selectedCrossingId || selectedCommunityId}
+              </div>
               <div
-                className="CrossingMapSearchBar__selected-item"
-                onClick={this.clearSearch}
+                className="CrossingMapSearchBar__icon"
+                onClick={this.resetMap}
               >
-                Back to Search
+                <img src={CloseLightSvg} alt="Clear" />
+              </div>
+              <div
+                className="CrossingMapSearchBar__icon"
+                onClick={() => {
+                  this.setState({ isSearching: true });
+                }}
+              >
+                <img src={SearchLightSvg} alt="Search" />
+              </div>
+            </div>
+          )}
+          {this.state.isSearching && (
+              <div className="CrossingMapSearchBar__search-container">
+                <div className="CrossingMapSearchBar__icon">
+                  <img src={SearchLightSvg} alt="Search" />
+                </div>
+                <div className="CrossingMapSearchBar__search">
+                  <Autosuggest
+                    onBlur={() => {
+                      this.setState({ isSearching: false });
+                    }}
+                    ref={autosuggest => {
+                      if (autosuggest !== null) {
+                        this.autosuggestInput = autosuggest.input;
+                      }
+                    }}
+                    suggestions={suggestions}
+                    multiSection={true}
+                    getSectionSuggestions={getSectionSuggestions}
+                    renderSectionTitle={renderSectionTitle}
+                    onSuggestionsFetchRequested={
+                      this.onSuggestionsFetchRequested
+                    }
+                    onSuggestionsClearRequested={
+                      this.onSuggestionsClearRequested
+                    }
+                    onSuggestionSelected={this.onSuggestionSelected}
+                    onSuggestionHighlighted={this.onSuggestionHighlighted}
+                    getSuggestionValue={getSuggestionValue}
+                    renderSuggestion={Suggestion}
+                    inputProps={inputProps}
+                    shouldRenderSuggestions={() => true}
+                    focusInputOnSuggestionClick={false}
+                  />
+                </div>
+                <div
+                  className="CrossingMapSearchBar__icon"
+                  onClick={this.resetMap}
+                >
+                  <img src={CloseLightSvg} alt="Clear" />
+                </div>
               </div>
             )}
-            {!selectedCrossingId && (
-              <Autosuggest
-                ref={autosuggest => {
-                  if (autosuggest !== null) {
-                    this.autosuggestInput = autosuggest.input;
-                  }
-                }}
-                suggestions={suggestions}
-                multiSection={true}
-                getSectionSuggestions={getSectionSuggestions}
-                renderSectionTitle={renderSectionTitle}
-                onSuggestionsFetchRequested={this.onSuggestionsFetchRequested}
-                onSuggestionsClearRequested={this.onSuggestionsClearRequested}
-                onSuggestionSelected={this.onSuggestionSelected}
-                onSuggestionHighlighted={this.onSuggestionHighlighted}
-                getSuggestionValue={getSuggestionValue}
-                renderSuggestion={Suggestion}
-                inputProps={inputProps}
-                shouldRenderSuggestions={() => true}
-                focusInputOnSuggestionClick={false}
-              />
-            )}
-          </div>
-          <div
-            className="CrossingMapSearchBar__cancel-icon"
-            onClick={this.clearSearch}
-          >
-            <img src={CloseLightSvg} alt="Clear" />
-          </div>
         </div>
       </div>
     );
